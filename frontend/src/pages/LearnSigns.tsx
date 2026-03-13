@@ -1,16 +1,40 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Mic, Send, Type, FileAudio, Play, Pause, RotateCcw, Box, Layers, MonitorPlay } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+
+import { SignAvatar } from '../components/SignAvatar';
 
 const LearnSigns = () => {
   const [inputText, setInputText] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [currentSign, setCurrentSign] = useState("");
 
-  const startAnimation = () => {
+  const startAnimation = async () => {
+    if (!inputText) return;
     setIsAnimating(true);
-    // Simulate animation duration
-    setTimeout(() => setIsAnimating(false), 3000);
+    setCurrentSign(inputText);
+    
+    try {
+      const response = await fetch("http://localhost:8000/api/text-to-sign", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ text: inputText })
+      });
+      const data = await response.json();
+      console.log("Animation sequence:", data.animations);
+      
+      // Simulate the time the animation takes to play
+      setTimeout(() => {
+        setIsAnimating(false);
+        setCurrentSign("");
+      }, 3000);
+    } catch (e) {
+      console.error(e);
+      setIsAnimating(false);
+      setCurrentSign("");
+    }
   };
 
   const toggleRecording = () => {
@@ -61,28 +85,12 @@ const LearnSigns = () => {
                </button>
             </div>
 
-            {/* Avatar Placeholder */}
+            {/* Advanced 3D Avatar */}
             <div className="w-full h-full flex items-center justify-center bg-gradient-to-b from-transparent to-secondary/10">
-               <motion.div 
-                 animate={isAnimating ? { 
-                   rotateY: [0, 15, -15, 0],
-                   y: [0, -5, 5, 0] 
-                 } : {}}
-                 transition={{ repeat: Infinity, duration: 2 }}
-                 className="relative w-64 h-96 flex flex-col items-center justify-center"
-               >
-                 {/* Simplified Avatar Skeleton */}
-                 <div className="w-16 h-16 rounded-full bg-white/10 border-2 border-white/20 mb-4" />
-                 <div className="w-32 h-48 rounded-3xl bg-white/5 border-2 border-white/10 flex flex-col gap-4 p-4 overflow-hidden">
-                    <div className="w-full h-2 bg-white/10 rounded-full" />
-                    <div className="w-full h-2 bg-white/10 rounded-full" />
-                    <div className="w-full h-2 bg-white/10 rounded-full" />
-                 </div>
-                 {/* Glowing shadow */}
-                 <div className="absolute bottom-0 w-32 h-8 bg-secondary/20 blur-2xl rounded-full" />
-               </motion.div>
+            {/* 3D Avatar Rendering Here */}
+            <SignAvatar isAnimating={isAnimating} textToSign={currentSign} />
             </div>
-
+            
             {/* Animation Controls */}
             <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 px-6 py-3 glass-card bg-black/60 border-white/10">
                <button 

@@ -1,20 +1,112 @@
-import React, { useState } from 'react';
-import { Camera, Upload, Play, CheckCircle2, AlertCircle, Info, HandMetal, History } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Camera, Upload, Play, Square, CheckCircle2, AlertCircle, Info, History } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const SignToText = () => {
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [prediction, setPrediction] = useState<string | null>(null);
   const [confidence, setConfidence] = useState(0);
+  const [isVideoUploaded, setIsVideoUploaded] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const intervalRef = useRef<number | null>(null);
 
-  const startInference = () => {
-    setIsCameraOn(true);
-    // Simulate prediction
-    setTimeout(() => {
-      setPrediction("HELLO WORLD");
-      setConfidence(98.5);
-    }, 2000);
+  const startInference = async () => {
+    try {
+      setIsVideoUploaded(false);
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      streamRef.current = stream;
+      setIsCameraOn(true);
+      
+      // Start sending frames to backend
+      intervalRef.current = window.setInterval(sendFrame, 1000);
+    } catch (err) {
+      console.error("Error accessing camera", err);
+      alert("Could not access camera.");
+    }
   };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && videoRef.current) {
+      stopInference(); // Stop camera if running
+      
+      const fileUrl = URL.createObjectURL(file);
+      videoRef.current.srcObject = null;
+      videoRef.current.src = fileUrl;
+      
+      setIsVideoUploaded(true);
+      setIsCameraOn(true);
+      
+      // Start inference on the uploaded video
+      intervalRef.current = window.setInterval(sendFrame, 1000);
+    }
+  };
+
+  const stopInference = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+    }
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+    if (videoRef.current && isVideoUploaded) {
+      // Clear object URL if a file was uploaded
+      URL.revokeObjectURL(videoRef.current.src);
+      videoRef.current.src = '';
+    } else if (videoRef.current) {
+       videoRef.current.srcObject = null;
+    }
+    
+    setIsVideoUploaded(false);
+    setIsCameraOn(false);
+  };
+
+  const sendFrame = async () => {
+    if (!videoRef.current) return;
+    
+    // Create a canvas to extract the frame
+    const canvas = document.createElement('canvas');
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+    
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      const formData = new FormData();
+      formData.append('frame', blob, 'frame.jpg');
+
+      try {
+        const response = await fetch("http://localhost:8000/api/sign-to-text", {
+          method: "POST",
+          body: formData,
+        });
+        const data = await response.json();
+        setPrediction(data.text || "Hello World");
+        setConfidence(98.5);
+      } catch (e) {
+        console.error("Frame inference failed", e);
+      }
+    }, 'image/jpeg');
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopInference();
+    };
+  }, []);
+
+  // Sync stream to video element when it mounts
+  useEffect(() => {
+    if (isCameraOn && !isVideoUploaded && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [isCameraOn, isVideoUploaded]);
 
   return (
     <div className="space-y-10">
@@ -55,34 +147,57 @@ const SignToText = () => {
                     <Play className="w-4 h-4 fill-white" />
                     Start Camera
                   </button>
-                  <button className="px-6 py-2.5 rounded-xl bg-surface-light border border-white/10 text-white font-bold hover:bg-surface transition-all flex items-center gap-2">
+                  <button 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-6 py-2.5 rounded-xl bg-surface-light border border-white/10 text-white font-bold hover:bg-surface transition-all flex items-center gap-2"
+                  >
                     <Upload className="w-4 h-4" />
                     Upload Video
                   </button>
+                  <input 
+                    type="file" 
+                    accept="video/*" 
+                    className="hidden" 
+                    ref={fileInputRef}
+                    onChange={handleFileUpload}
+                  />
                 </div>
               </div>
             ) : (
               <div className="w-full h-full bg-black relative">
-                <div className="absolute top-6 left-6 flex items-center gap-3 z-10">
+                <div className="absolute top-6 left-6 flex items-center gap-3 z-20">
                   <div className="px-3 py-1 rounded-full bg-red-500/20 border border-red-500/50 flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                     <span className="text-[10px] font-bold text-red-500 uppercase tracking-widest">Live Inference</span>
                   </div>
-                  <div className="px-3 py-1 rounded-full bg-black/50 backdrop-blur-md border border-white/10 text-[10px] font-bold text-gray-300">
-                    42ms Latency
-                  </div>
+                </div>
+                <div className="absolute top-6 right-6 z-30">
+                  <button 
+                    onClick={stopInference}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/80 hover:bg-red-500 text-white font-bold shadow-lg backdrop-blur-md transition-all"
+                  >
+                    <Square className="w-4 h-4 fill-white" />
+                    Stop
+                  </button>
                 </div>
                 
-                {/* Simulated Camera Feed Overlay */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                   <HandMetal className="w-32 h-32 text-white/10 animate-pulse" />
+                {/* Actual Feed */}
+                <div className="absolute inset-0 flex items-center justify-center overflow-hidden rounded-xl">
+                   <video 
+                     ref={videoRef} 
+                     autoPlay 
+                     playsInline 
+                     muted 
+                     onLoadedMetadata={() => videoRef.current?.play()}
+                     className="w-full h-full object-cover z-0"
+                   />
                 </div>
                 
-                {/* Simulated Bounding Box */}
+                {/* Bounding Box */}
                 <motion.div 
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="absolute top-1/4 left-1/4 w-1/2 h-1/2 border-2 border-primary border-dashed rounded-3xl"
+                  className="absolute top-1/4 left-1/4 w-1/2 h-1/2 border-2 border-primary border-dashed rounded-3xl z-10 pointer-events-none"
                 >
                    <div className="absolute -top-3 -left-3 w-6 h-6 border-t-4 border-l-4 border-primary rounded-tl-xl" />
                    <div className="absolute -top-3 -right-3 w-6 h-6 border-t-4 border-r-4 border-primary rounded-tr-xl" />

@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -111,7 +111,8 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <SidebarItem 
               icon={Settings} 
               label="Settings" 
-              to="#" 
+              to="/profile" 
+              active={location.pathname === '/profile'}
             />
           </div>
         </nav>
@@ -130,7 +131,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             />
           </div>
           
-          <div className="flex items-center gap-4">
+          <Link to="/profile" className="flex items-center gap-4 hover:opacity-80 transition-opacity">
             <div className="flex flex-col items-end">
               <span className="text-sm font-medium text-white">Researcher User</span>
               <span className="text-[10px] text-gray-500">SignHack Lab</span>
@@ -138,7 +139,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <div className="w-10 h-10 rounded-full bg-surface-light border border-white/10 flex items-center justify-center overflow-hidden">
               <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="avatar" />
             </div>
-          </div>
+          </Link>
         </header>
 
         {/* Canvas Area */}
